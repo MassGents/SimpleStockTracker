@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Simple Stock Tracker</title>
+<style>
+  body {
+    background: #0a0a0a;
+    color: #eee;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    max-width: 700px;
+    margin: 2rem auto;
+    padding: 1rem;
+  }
+  h1 {
+    color: #0ff;
+  }
+  input, button {
+    padding: 0.5rem;
+    font-size: 1rem;
+  }
+  button {
+    cursor: pointer;
+    background: #0ff;
+    border: none;
+    color: #000;
+    margin-left: 0.5rem;
+    border-radius: 4px;
+  }
+  ul {
+    list-style: none;
+    padding-left: 0;
+  }
+  li {
+    margin-bottom: 0.5rem;
+  }
+  a {
+    color: #0ff;
+    text-decoration: none;
+  }
+  .stock-box {
+    background: #111;
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 6px;
+  }
+  .remove-btn {
+    background: red;
+    color: white;
+    border: none;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    float: right;
+  }
+</style>
+</head>
+<body>
+  <h1>Simple Stock Tracker</h1>
+  <p>Enter stock symbols (e.g. AAPL, TSLA), add them and see live prices and news.</p>
+  <input id="stockInput" placeholder="Enter stock symbol" />
+  <button onclick="addStock()">Add Stock</button>
+  <div id="stocksContainer"></div>
+  <h2>Latest News for First Stock</h2>
+  <ul id="newsList"></ul>
+
+<script>
+  const TWELVE_API_KEY = "5ef5daf5f4454f209b8a74ecd5907d92";  // Your Twelve Data API key
+  const NEWS_API_KEY = "fb972affa3a5480799e8ebebadc275ff";       // Your NewsAPI key
+
+  const stocks = [];
+  const prices = {};
+
+  const stocksContainer = document.getElementById("stocksContainer");
+  const newsList = document.getElementById("newsList");
+
+  function addStock() {
+    const input = document.getElementById("stockInput");
+    const sym = input.value.trim().toUpperCase();
+    if (!sym) return alert("Please enter a stock symbol.");
+    if (stocks.includes(sym)) return alert("Stock already added.");
+    stocks.push(sym);
+    input.value = "";
+    renderStocks();
+    fetchPrices();
+    fetchNews();
+  }
+
+  function removeStock(sym) {
+    const idx = stocks.indexOf(sym);
+    if (idx > -1) {
+      stocks.splice(idx, 1);
+      delete prices[sym];
+      renderStocks();
+      fetchPrices();
+      fetchNews();
+    }
+  }
+
+  function renderStocks() {
+    stocksContainer.innerHTML = "";
+    for (const sym of stocks) {
+      const box = document.createElement("div");
+      box.className = "stock-box";
+      box.innerHTML = `
+        <button class="remove-btn" onclick="removeStock('${sym}')">X</button>
+        <h3>${sym}</h3>
+        <p>Current Price: <strong>${prices[sym] ? "$" + prices[sym] : "Loading..."}</strong></p>
+      `;
+      stocksContainer.appendChild(box);
+    }
+  }
+
+  async function fetchPrices() {
+    if (stocks.length === 0) return;
+    const symbolsParam = stocks.join(",");
+    try {
+      const res = await fetch(
+        `https://api.twelvedata.com/price?symbol=${symbolsParam}&apikey=${TWELVE_API_KEY}`
+      );
+      const data = await res.json();
+      if (stocks.length === 1) {
+        prices[stocks[0]] = data.price || "N/A";
+      } else {
+        for (const sym of stocks) {
+          prices[sym] = data[sym]?.price || "N/A";
+        }
+      }
+      renderStocks();
+    } catch (e) {
+      console.error("Price fetch error", e);
+    }
+  }
+
+  async function fetchNews() {
+    newsList.innerHTML = "<li>Loading news...</li>";
+    if (stocks.length === 0) {
+      newsList.innerHTML = "<li>No stocks added to fetch news for.</li>";
+      return;
+    }
+    const query = stocks[0]; // only show news for the first stock
+    try {
+      const res = await fetch(
+        `https://newsapi.org/v2/everything?q=${query}&sortBy=publishedAt&pageSize=5&apiKey=${NEWS_API_KEY}`
+      );
+      const data = await res.json();
+      if (!data.articles || data.articles.length === 0) {
+        newsList.innerHTML = "<li>No news found.</li>";
+        return;
+      }
+      newsList.innerHTML = "";
+      for (const article of data.articles) {
+        const li = document.createElement("li");
+        li.innerHTML = `<a href="${article.url}" target="_blank">${article.title}</a>`;
+        newsList.appendChild(li);
+      }
+    } catch (e) {
+      console.error("News fetch error", e);
+      newsList.innerHTML = "<li>Error loading news.</li>";
+    }
+  }
+
+  // Auto refresh every 60 seconds
+  setInterval(() => {
+    fetchPrices();
+    fetchNews();
+  }, 60000);
+</script>
+</body>
+</html>
